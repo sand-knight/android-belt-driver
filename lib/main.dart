@@ -1,4 +1,9 @@
+import 'package:android_belt_driver/drivers/belt_driver/HappySleep.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+
+final blePlatform = FlutterReactiveBle();
+//final belt = HappySleep_device(blePlatform, "ED:D0:65:DB:42:42");
 
 void main() {
   runApp(const MyApp());
@@ -48,7 +53,47 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+  String _counter = "Get time?";
+
+  final belt = HappySleep_device(blePlatform, "ED:D0:65:DB:42:42");
+  late final Stream<ConnectionStateUpdate> _connectionstate;
+  int _state = 0;
+  bool buttonaval=true;
+  Future<String> ? message;
+
+  @override
+  void initState() { 
+    super.initState();
+    belt.connect();
+    _connectionstate=belt.connectionStateStream;
+
+    blePlatform.statusStream.listen(
+      (status) {
+        if(status == BleStatus.ready){
+          setState(
+            () {
+              _state = 1;
+            
+            }
+          );
+        }
+      }
+    );
+
+    _connectionstate.listen(
+      (event) {
+        if(event.connectionState == DeviceConnectionState.connected){
+          setState(
+            () {
+              _state = 2;
+            
+            }
+          );
+        }
+      }
+    );
+  }
+
 
   void _incrementCounter() {
     setState(() {
@@ -57,7 +102,16 @@ class _MyHomePageState extends State<MyHomePage> {
       // so that the display can reflect the updated values. If we changed
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
-      _counter++;
+      //_counter++;
+      buttonaval=false;
+      message=belt.time.then(
+        (value) {
+          setState(() {
+            buttonaval=true;
+          });
+          return value.toString();
+        }
+      );
     });
   }
 
@@ -95,13 +149,26 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
+            Row(
+              children: [
+                const Text("State "),
+                Icon(
+                  Icons.access_alarm,
+                  color: _state==0 ? Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? Color.fromRGBO(0, 0, 255, 1) :Color.fromRGBO(0, 255, 0, 1) )
+                )
+                  
+                
+              ],
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
+            FutureBuilder(
+              future: message,
+              builder: (BuildContext, m) {
+                if(m.hasData) return Text(m.data!);
+                else return CircularProgressIndicator();
+              },
+              initialData: "get time?",
+            )
+            
           ],
         ),
       ),
