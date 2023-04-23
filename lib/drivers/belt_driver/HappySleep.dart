@@ -26,15 +26,13 @@ class HappySleep_device{
 
   void connect(){
     print('provo');
-    // _connectionStateController.addStream(
-    //   _reactiveBle.connectToAdvertisingDevice(
-    //     id: deviceID,
-    //     withServices: [SERVICES.MAIN],
-    //     prescanDuration: const Duration(seconds: 7),
-    //     connectionTimeout: const Duration(seconds: 10),
+    _connectionStateController.addStream(
+      _reactiveBle.connectToDevice(
+        id: deviceID,
+        connectionTimeout: const Duration(seconds: 10),
 
-    //   )
-    // );
+      )
+    );
 
     // connectionStateStream.listen(
     //   (event) {
