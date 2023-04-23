@@ -64,11 +64,12 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() { 
     super.initState();
-    belt.connect();
+    //belt.connect();
     _connectionstate=belt.connectionStateStream;
 
     blePlatform.statusStream.listen(
       (status) {
+        print("Status:\n"+ status.toString());
         if(status == BleStatus.ready){
           setState(
             () {
@@ -149,17 +150,17 @@ class _MyHomePageState extends State<MyHomePage> {
           // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Row(
-              children: [
-                const Text("State "),
-                Icon(
-                  Icons.access_alarm,
-                  color: _state==0 ? Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? Color.fromRGBO(0, 0, 255, 1) :Color.fromRGBO(0, 255, 0, 1) )
-                )
+            // Row(
+            //   children: [
+            //     const Text("State "),
+            //     Icon(
+            //       Icons.access_alarm,
+            //       color: _state==0 ? Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? Color.fromRGBO(0, 0, 255, 1) :Color.fromRGBO(0, 255, 0, 1) )
+            //     )
                   
                 
-              ],
-            ),
+            //   ],
+            // ),
             FutureBuilder(
               future: message,
               builder: (BuildContext, m) {
@@ -167,6 +168,11 @@ class _MyHomePageState extends State<MyHomePage> {
                 else return CircularProgressIndicator();
               },
               initialData: "get time?",
+            ),
+            IconButton(
+              onPressed: () => belt.connect(),
+              icon: const Icon(Icons.bluetooth),
+              color: _state==0 ? Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? Color.fromRGBO(0, 0, 255, 1) :Color.fromRGBO(0, 255, 0, 1) ),
             )
             
           ],
@@ -176,7 +182,8 @@ class _MyHomePageState extends State<MyHomePage> {
         onPressed: _incrementCounter,
         tooltip: 'Increment',
         child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ),
+       // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }

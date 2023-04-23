@@ -26,15 +26,15 @@ class HappySleep_device{
 
   void connect(){
     print('provo');
-    _connectionStateController.addStream(
-      _reactiveBle.connectToAdvertisingDevice(
-        id: deviceID,
-        withServices: [SERVICES.MAIN],
-        prescanDuration: const Duration(seconds: 7),
-        connectionTimeout: const Duration(seconds: 10),
+    // _connectionStateController.addStream(
+    //   _reactiveBle.connectToAdvertisingDevice(
+    //     id: deviceID,
+    //     withServices: [SERVICES.MAIN],
+    //     prescanDuration: const Duration(seconds: 7),
+    //     connectionTimeout: const Duration(seconds: 10),
 
-      )
-    );
+    //   )
+    // );
 
     // connectionStateStream.listen(
     //   (event) {
@@ -66,6 +66,12 @@ class HappySleep_device{
 
     encodedMeasurements.listen(
       (event) {
+        print(event.toString());
+      }
+    );
+
+    connectionStateStream.listen(
+      (event){
         print(event.toString());
       }
     );
