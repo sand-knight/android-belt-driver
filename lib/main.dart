@@ -77,6 +77,12 @@ class _MyHomePageState extends State<MyHomePage> {
             
             }
           );
+        }else{
+          setState(
+            (){
+              _state = 0;
+            }
+          );
         }
       }
     );
@@ -90,6 +96,10 @@ class _MyHomePageState extends State<MyHomePage> {
             
             }
           );
+        }else{
+          if (_state == 2){
+            _state = 1;
+          }
         }
       }
     );
@@ -165,7 +175,14 @@ class _MyHomePageState extends State<MyHomePage> {
               future: message,
               builder: (BuildContext, m) {
                 if(m.hasData) return Text(m.data!);
-                else return CircularProgressIndicator();
+                else if (m.hasError) return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error),
+                    Text(m.error.toString())
+                  ],
+                );
+                return const CircularProgressIndicator();
               },
               initialData: "get time?",
             ),
