@@ -123,9 +123,9 @@ class HappySleep_device{
     await _reactiveBle.writeCharacteristicWithResponse(writeCharacteristic, value: message);
   }
 
-  Future<List<int>> get time async {
+  Future<DateTime> get time async {
     final fut = _sendMessage(COMMANDS.GET_TIME);
-    final Completer<List<int>> value=Completer();
+    final Completer<DateTime> value=Completer();
 
     final sub = encodedMeasurements.where(
       (event) {
@@ -134,7 +134,7 @@ class HappySleep_device{
       }
     ).take(1).listen(
       (event) {
-        value.complete(event);
+        value.complete(_decode_BCD_time(event) );
       }
     );
     
@@ -142,10 +142,49 @@ class HappySleep_device{
       const Duration(seconds: 1),
       onTimeout: () async {
         await sub.cancel();
-        return Future<List<int>>.error(Exception("Communication timeout"));
+        return Future<DateTime>.error(Exception("Communication timeout"));
       }
     );
   }
+
   
+  
+
+  //==================================== ENCODE/DECODE UTILITIES ===============
+  /// Decode time for specifics 3.2
+  /// 
+  /// [message] is the whole message (i.e the first element will be ignored)
+  DateTime _decode_BCD_time(List<int> message){
+    
+    int BCD_decode(int bcd){
+      return (bcd~/16) *10+bcd%16; //tilde is integer division
+    }
+    return DateTime(
+      2000+BCD_decode(message[1]),
+      BCD_decode(message[2]),
+      BCD_decode(message[3]),
+      BCD_decode(message[4]),
+      BCD_decode(message[5]),
+      BCD_decode(message[6])
+
+    );
+
+  }
+
+  List<int> _encode_BCD_time(DateTime dt){
+    int BCD_encode(int data){
+      return (data~/10)*16 + data%10;
+    }
+
+    List<int> returnval=[];
+    returnval.add(dt.year);
+    returnval.add(dt.month);
+    returnval.add(dt.day);
+    returnval.add(dt.hour);
+    returnval.add(dt.minute);
+    returnval.add(dt.second);
+
+    return returnval;
+  }
 
 }
