@@ -12,7 +12,9 @@ class HappySleep_device{
 
   final StreamController<ConnectionStateUpdate> _connectionStateController = StreamController<ConnectionStateUpdate>(); //this controls the following broadcast
   late final Stream<ConnectionStateUpdate> connectionStateStream; //here we expose a unique broadcast
-  StreamSubscription<ConnectionStateUpdate> ? _connection, _connection_watchdog ;
+  StreamSubscription<ConnectionStateUpdate> ? _connection,  //a subscription we must cancel() in order to disconnect (ask philips hue why the heck)
+                                              _connection_watchdog ; //the thing which tries to reconnect every 10 seconds
+    //https://github.com/PhilipsHue/flutter_reactive_ble/issues/27
 
   final StreamController<List<int>> _notificationStreamController = StreamController<List<int>>();
   late final Stream<List<int>> encodedMeasurements;
@@ -92,7 +94,6 @@ class HappySleep_device{
     // _notificationStreamController.addStream(
     //       _reactiveBle.subscribeToCharacteristic(notificationCharacteristic)
     // );
-    //https://github.com/PhilipsHue/flutter_reactive_ble/issues/27
 
     encodedMeasurements.listen(
       (event) {
@@ -117,24 +118,50 @@ class HappySleep_device{
     );
   }
   
+  //======================== BASIC FUNCTIONS =============================================
 
   Future<void> _sendMessage(List<int> message) async {
-    
+    print("Sending message: "+message.toString());
     await _reactiveBle.writeCharacteristicWithResponse(writeCharacteristic, value: message);
   }
 
-  Future<DateTime> get time async {
+  void _addPaddingTo(List<int> message){
+    final int size = message.length;
+    for( int i=0; i<(15-size); i++){
+      message.add(0);
+    }
+  }
+
+  int _calculateCRC(List<int> message){
+    int sum = 0;
+    for (int i in message){
+      sum+=i;
+    }
+    return sum%255;
+  }
+
+  void _completeMessage(List<int> message){
+    _addPaddingTo(message);
+    message.add(_calculateCRC(message));
+  }
+
+  //======================= METHODS ======================================================
+
+  /// Get Time
+  /// 
+  /// [return] is a DateTime object representing current time
+  Future<DateTime> getTime() async {
     final fut = _sendMessage(COMMANDS.GET_TIME);
     final Completer<DateTime> value=Completer();
 
-    final sub = encodedMeasurements.where(
+    final sub = encodedMeasurements
+    .take(1).listen(
       (event) {
-        return event.isMessage(RESPONSES.GET_TIME_HEADER);
-      
-      }
-    ).take(1).listen(
-      (event) {
-        value.complete(_decode_BCD_time(event) );
+        if (event.isMessage(RESPONSES.GET_TIME_HEADER)){
+          value.complete(_decode_BCD_time(event) );
+        }else if (event.isMessage(RESPONSES.GET_TIME_ERROR)){
+          value.completeError(Exception("Belt reported error"));
+        }
       }
     );
     
@@ -147,7 +174,34 @@ class HappySleep_device{
     );
   }
 
-  
+  Future<void> setTime({DateTime ? dt}) async {
+    if (dt == null) dt = DateTime.now();
+
+    final List<int> message = COMMANDS.SET_TIME_HEADER.sublist(0);
+    message.addAll(_encode_BCD_time(dt));
+    _completeMessage(message);
+
+    final fut = _sendMessage(message);
+    final Completer<void> value=Completer();
+
+    final sub = encodedMeasurements
+    .take(1).listen(
+      (event) {
+        if (event.isMessage(RESPONSES.SET_TIME_OK))
+          value.complete();
+        else if (event.isMessage(RESPONSES.SET_TIME_ERROR))
+          value.completeError(Exception("Belt reported error"));
+      }
+    );
+    
+    return value.future.timeout(
+      const Duration(seconds: 1),
+      onTimeout: () async {
+        await sub.cancel();
+        return Future<void>.error(Exception("Communication timeout"));
+      }
+    );
+  }
   
 
   //==================================== ENCODE/DECODE UTILITIES ===============
@@ -177,12 +231,12 @@ class HappySleep_device{
     }
 
     List<int> returnval=[];
-    returnval.add(dt.year);
-    returnval.add(dt.month);
-    returnval.add(dt.day);
-    returnval.add(dt.hour);
-    returnval.add(dt.minute);
-    returnval.add(dt.second);
+    returnval.add(BCD_encode(dt.year-2000));
+    returnval.add(BCD_encode(dt.month));
+    returnval.add(BCD_encode(dt.day));
+    returnval.add(BCD_encode(dt.hour));
+    returnval.add(BCD_encode(dt.minute));
+    returnval.add(BCD_encode(dt.second));
 
     return returnval;
   }

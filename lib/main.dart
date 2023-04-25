@@ -115,14 +115,28 @@ class _MyHomePageState extends State<MyHomePage> {
       // called again, and so nothing would appear to happen.
       //_counter++;
       buttonaval=false;
-      message=belt.time.then(
+
+      message = belt.setTime().then(
         (value) {
-          setState(() {
-            buttonaval=true;
-          });
-          return value.toString();
+          return belt.getTime().then(
+            (beltTime) {
+              setState(() {
+                buttonaval=true;
+              });
+              return beltTime.toString();
+            }
+          );
         }
       );
+
+      // message=belt.getTime().then(
+      //   (value) {
+      //     setState(() {
+      //       buttonaval=true;
+      //     });
+      //     return value.toString();
+      //   }
+      // );
     });
   }
 
