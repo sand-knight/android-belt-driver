@@ -1,17 +1,25 @@
+import 'dart:io';
+
 import 'package:android_belt_driver/drivers/belt_driver/HappySleep.dart';
+import 'package:android_belt_driver/drivers/belt_driver/clientAndroid.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
-final blePlatform = FlutterReactiveBle();
-//final belt = HappySleep_device(blePlatform, "ED:D0:65:DB:42:42");
-
 void main() {
-  runApp(const MyApp());
+
+  WidgetsFlutterBinding.ensureInitialized();
+  final blePlatform;
+  if( Platform.isAndroid ){
+    blePlatform = FlutterReactiveBle();
+  }else{
+    blePlatform = FlutterReactiveBle();
+  }
+  runApp(MyApp(blePlatform));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
+  MyApp(this.blePlatform, {super.key});
+  final blePlatform;
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
@@ -29,14 +37,14 @@ class MyApp extends StatelessWidget {
         // is not restarted.
         primarySwatch: Colors.blue,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(blePlatform, title: 'Flutter Demo Home Page'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
+  const MyHomePage(this.blePlatform, {super.key, required this.title});
+  final blePlatform;
   // This widget is the home page of your application. It is stateful, meaning
   // that it has a State object (defined below) that contains fields that affect
   // how it looks.
@@ -49,14 +57,17 @@ class MyHomePage extends StatefulWidget {
   final String title;
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MyHomePage> createState() => _MyHomePageState(blePlatform);
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   String _counter = "Get time?";
+  _MyHomePageState(this.blePlatform);
+  final blePlatform;
 
-  final belt = HappySleep_device(blePlatform, "ED:D0:65:DB:42:42");
-  late final Stream<ConnectionStateUpdate> _connectionstate;
+  late final HappySleepDevice belt;
+
+  late final Stream<DeviceConnectionState> _connectionstate;
   int _state = 0;
   bool buttonaval=true;
   Future<String> ? message;
@@ -64,8 +75,11 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() { 
     super.initState();
-    //belt.connect();
-    _connectionstate=belt.connectionStateStream;
+    belt = HappySleepDevice(
+        Platform.isAndroid ? HappySleepClientAndroid(blePlatform, "ED:D0:65:DB:42:42") : throw Exception()
+      );
+
+    Stream<DeviceConnectionState> _connectionstate = belt.connectionStateStream;
 
     blePlatform.statusStream.listen(
       (status) {
@@ -89,7 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     _connectionstate.listen(
       (event) {
-        if(event.connectionState == DeviceConnectionState.connected){
+        if(event == DeviceConnectionState.connected){
           setState(
             () {
               _state = 2;

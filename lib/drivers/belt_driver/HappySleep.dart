@@ -1,129 +1,23 @@
+// ignore_for_file: prefer_conditional_assignment, curly_braces_in_flow_control_structures
+
 import 'dart:async';
 
 import 'package:android_belt_driver/drivers/belt_driver/Constants.dart';
-import 'package:flutter/rendering.dart';
+import 'package:android_belt_driver/drivers/belt_driver/clientInterface.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
-class HappySleep_device{
+class HappySleepDevice{
 
-  final FlutterReactiveBle _reactiveBle;
-  final String deviceID;
-  late final QualifiedCharacteristic writeCharacteristic, notificationCharacteristic;
-
-  final StreamController<ConnectionStateUpdate> _connectionStateController = StreamController<ConnectionStateUpdate>(); //this controls the following broadcast
-  late final Stream<ConnectionStateUpdate> connectionStateStream; //here we expose a unique broadcast
-  StreamSubscription<ConnectionStateUpdate> ? _connection,  //a subscription we must cancel() in order to disconnect (ask philips hue why the heck)
-                                              _connection_watchdog ; //the thing which tries to reconnect every 10 seconds
-    //https://github.com/PhilipsHue/flutter_reactive_ble/issues/27
-
-  final StreamController<List<int>> _notificationStreamController = StreamController<List<int>>();
-  late final Stream<List<int>> encodedMeasurements;
-  StreamSubscription<List<int>> ? _encodedMeasurements;
-
-
-  HappySleep_device(FlutterReactiveBle hostBleDevice, this.deviceID ) :
-    _reactiveBle=hostBleDevice
-  {
-    encodedMeasurements = _notificationStreamController.stream.asBroadcastStream();
-    connectionStateStream = _connectionStateController.stream.asBroadcastStream();
-    writeCharacteristic = QualifiedCharacteristic(characteristicId: CHARACTERISTICS.WRITABLE, serviceId: SERVICES.MAIN, deviceId: deviceID);
-    notificationCharacteristic = QualifiedCharacteristic(characteristicId: CHARACTERISTICS.NOTIFICATIONS, serviceId: SERVICES.MAIN, deviceId: deviceID);
+  HappySleepDevice(HappySleepClient client)
+  : _client = client {
+    connect = client.connect;
+    disconnect = client.disconnect;
   }
 
-  void _connect (){
-    var connectionStateStream = _reactiveBle.connectToDevice(
-      id: deviceID,
-      connectionTimeout: const Duration(seconds: 10),
-
-    );
-
-    
-    _connection = connectionStateStream.listen(
-      (event) async {
-        _connectionStateController.add(event);
-        if(event.connectionState == DeviceConnectionState.connected){
-          print("Provo a connettermi");
-          
-          await _encodedMeasurements?.cancel();
-          _encodedMeasurements = _reactiveBle.subscribeToCharacteristic(notificationCharacteristic)
-          .listen(
-            (event) {
-
-              _notificationStreamController.add(event);
-            }
-          );
-          
-        }
-      }
-    );
-
-  }
-
-  void connect(){
-    
-    _connection?.cancel();
-    _connect();
-
-    _connection_watchdog = connectionStateStream.listen(
-      (event) {
-        print("Trying reconnection");
-        if(event.connectionState == DeviceConnectionState.disconnected){
-          Future.delayed(const Duration(seconds: 10)).then(
-            (value) async {
-              await _connection!.cancel();
-              _connect();
-            }
-          );
-        }
-      }
-      
-    );
-  
-  
-    // connectionStateStream.where(
-    //   (event) => event.connectionState == DeviceConnectionState.connected
-    // ).take(1).listen(
-    //   (event) {
-    //     print("Sono connesso");
-    //     _notificationStreamController.addStream(
-    //       _reactiveBle.subscribeToCharacteristic(notificationCharacteristic)
-    //     );
-    //   }
-    // );
-
-    // _notificationStreamController.addStream(
-    //       _reactiveBle.subscribeToCharacteristic(notificationCharacteristic)
-    // );
-
-    encodedMeasurements.listen(
-      (event) {
-        print(event.toString());
-      }
-    );
-
-    connectionStateStream.listen(
-      (event){
-        print(event.toString());
-      }
-    );
-  }
-
-  FutureOr<void> disconnect() async{
-
-    return _connection_watchdog?.cancel()
-    .then(
-      (e) async {
-        _connection?.cancel();
-      }
-    );
-  }
-  
-  //======================== BASIC FUNCTIONS =============================================
-
-  Future<void> _sendMessage(List<int> message) async {
-    print("Sending message: "+message.toString());
-    await _reactiveBle.writeCharacteristicWithResponse(writeCharacteristic, value: message);
-  }
+  late final HappySleepClient _client;
+  late final FutureOr<void> Function () connect;
+  late final FutureOr<void> Function () disconnect;
+  Stream<DeviceConnectionState>  get connectionStateStream => _client.connectionStateStream;
 
   void _addPaddingTo(List<int> message){
     final int size = message.length;
@@ -151,10 +45,10 @@ class HappySleep_device{
   /// 
   /// [return] is a DateTime object representing current time
   Future<DateTime> getTime() async {
-    final fut = _sendMessage(COMMANDS.GET_TIME);
+    final fut = _client.sendMessage(COMMANDS.GET_TIME);
     final Completer<DateTime> value=Completer();
 
-    final sub = encodedMeasurements
+    final sub = _client.arrivingMessages
     .take(1).listen(
       (event) {
         if (event.isMessage(RESPONSES.GET_TIME_HEADER)){
@@ -181,10 +75,10 @@ class HappySleep_device{
     message.addAll(_encode_BCD_time(dt));
     _completeMessage(message);
 
-    final fut = _sendMessage(message);
+    final fut = _client.sendMessage(message);
     final Completer<void> value=Completer();
 
-    final sub = encodedMeasurements
+    final sub = _client.arrivingMessages
     .take(1).listen(
       (event) {
         if (event.isMessage(RESPONSES.SET_TIME_OK))
