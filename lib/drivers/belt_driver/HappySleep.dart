@@ -1,6 +1,7 @@
 // ignore_for_file: prefer_conditional_assignment, curly_braces_in_flow_control_structures
 
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:android_belt_driver/drivers/belt_driver/Constants.dart';
 import 'package:android_belt_driver/drivers/belt_driver/clientInterface.dart';
@@ -12,12 +13,38 @@ class HappySleepDevice{
   : _client = client {
     connect = client.connect;
     disconnect = client.disconnect;
+
+    client.arrivingMessages.listen(_callback);
   }
 
   late final HappySleepClient _client;
   late final FutureOr<void> Function () connect;
   late final FutureOr<void> Function () disconnect;
+
   Stream<DeviceConnectionState>  get connectionStateStream => _client.connectionStateStream;
+
+  StreamController<int> _bcgController = StreamController<int>.broadcast();
+  Stream<int> get BCGValues => _bcgController.stream;
+
+  bool _isBcgActive = false;
+  bool get isBcgActive => _isBcgActive;
+
+  void _callback(List<int> message){
+    if(message.length == 20){ //bcg only has this behaviour
+      if (_isBcgActive){
+      
+        final ByteData l = ByteData.sublistView(Uint8List.fromList(message), 1 ,20);
+
+        for(int i=0; i<9; i++){
+          //message.
+          _bcgController.add(l.getInt16(i, Endian.big));
+        }
+      }else{
+        //close stream
+      }
+
+    }
+  }
 
   void _addPaddingTo(List<int> message){
     final int size = message.length;
@@ -49,11 +76,13 @@ class HappySleepDevice{
     final Completer<DateTime> value=Completer();
 
     final sub = _client.arrivingMessages
-    .take(1).listen(
+    .where(
+      (m) => m.isMessage(RESPONSES.GET_TIME_HEADER) || m.isMessage(RESPONSES.GET_TIME_ERROR)
+    ).take(1).listen(
       (event) {
         if (event.isMessage(RESPONSES.GET_TIME_HEADER)){
           value.complete(_decode_BCD_time(event) );
-        }else if (event.isMessage(RESPONSES.GET_TIME_ERROR)){
+        }else{
           value.completeError(Exception("Belt reported error"));
         }
       }
@@ -79,11 +108,13 @@ class HappySleepDevice{
     final Completer<void> value=Completer();
 
     final sub = _client.arrivingMessages
-    .take(1).listen(
+    .where(
+      (m) => m.isMessage(RESPONSES.SET_TIME_OK) || m.isMessage(RESPONSES.SET_TIME_ERROR)
+    ).take(1).listen(
       (event) {
         if (event.isMessage(RESPONSES.SET_TIME_OK))
           value.complete();
-        else if (event.isMessage(RESPONSES.SET_TIME_ERROR))
+        else
           value.completeError(Exception("Belt reported error"));
       }
     );
@@ -96,6 +127,83 @@ class HappySleepDevice{
       }
     );
   }
+
+  Future<Stream<int>> setBcgOn() async {
+
+
+    _client.sendMessage(COMMANDS.GET_RAWDATA_ON);
+    final Completer<Stream<int>> returnValue = Completer<Stream<int>>();
+    final StreamController<int> bcgValuesController = StreamController<int>();
+    
+    //aspetta una prova dell'avvenuta attivazione
+    final esitoSubscription = _client.arrivingMessages
+    .where(
+      (m) => m.isMessage(RESPONSES.GET_RAWDATA_HEADER) || m.isMessage(RESPONSES.GET_RAWDATA_ERROR)
+    ).take(1).listen(
+      (event) {
+        if (event.isMessage(RESPONSES.GET_RAWDATA_HEADER)){
+          returnValue.complete(bcgValuesController.stream );
+        }else{
+          returnValue.completeError(Exception("Belt reported error"));
+        }
+      }
+    );
+
+    //preleva i valori bcg
+    final StreamSubscription<List<int>> bcgValuesSubscription = _client.arrivingMessages.listen(
+      (event) {
+        if( event.length == 20 ){
+          final ByteData l = ByteData.sublistView(Uint8List.fromList(event), 1 ,20);
+
+          for(int i=0; i<18; i+=2){
+            //message.
+            bcgValuesController.add(l.getUint16(i, Endian.big));
+          }
+        }
+      }
+    );
+
+    // on cancel, deactivate bgc and its subscription
+    bcgValuesController.onCancel = () async {
+      await bcgValuesSubscription.cancel();
+      await _setBcgOff();
+    };
+
+    //fra un secondo, se non riesco a provare la connessione, deduco errore ed annullo
+    return returnValue.future.timeout(
+      const Duration(seconds: 1),
+      onTimeout: () async {
+        await esitoSubscription.cancel();
+        await bcgValuesSubscription.cancel();
+        return Future<Stream<int>>.error(Exception("Communication timeout"));
+      }
+    );
+  }
+
+  Future<void> _setBcgOff(){
+    _client.sendMessage(COMMANDS.GET_RAWDATA_OFF);
+    final Completer<void> returnValue = Completer<void>();
+
+    final esitoSubscription = _client.arrivingMessages.where(
+      (m) => m.isMessage(RESPONSES.GET_RAWDATA_OK) || m.isMessage(RESPONSES.GET_RAWDATA_ERROR)
+    ).take(1).listen(
+      (event) {
+        if (event[0]==RESPONSES.GET_RAWDATA_OK[0]){
+          returnValue.complete();
+          _isBcgActive = false;
+        }
+      }
+    );
+
+    return returnValue.future.timeout(
+      const Duration(seconds: 1),
+      onTimeout: () async {
+        await esitoSubscription.cancel();
+        return returnValue.completeError(Exception("Connection Timeout"));
+      }
+    );
+  }
+
   
 
   //==================================== ENCODE/DECODE UTILITIES ===============

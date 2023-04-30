@@ -11,14 +11,14 @@ class HappySleepClientAndroid implements HappySleepClient{
   final String deviceID;
   late final QualifiedCharacteristic writeCharacteristic, notificationCharacteristic;
 
-  final StreamController<DeviceConnectionState> _connectionStateController = StreamController<DeviceConnectionState>(); //this controls the following broadcast
+  final StreamController<DeviceConnectionState> _connectionStateController = StreamController<DeviceConnectionState>.broadcast(); //this controls the following broadcast
   late final Stream<DeviceConnectionState> _connectionStateStream; //here we expose a unique broadcast
   Stream<DeviceConnectionState> get connectionStateStream => _connectionStateStream;
-  StreamSubscription<ConnectionStateUpdate> ? _connection;  //a subscription we must cancel() in order to disconnect (ask philips hue why the heck)
+  StreamSubscription<ConnectionStateUpdate> ? _connection;  //a subscription we must cancel() in order to disconnect
   StreamSubscription<DeviceConnectionState> ? _connection_watchdog ; //the thing which tries to reconnect every 10 seconds
     //https://github.com/PhilipsHue/flutter_reactive_ble/issues/27
 
-  final StreamController<List<int>> _notificationStreamController = StreamController<List<int>>();
+  final StreamController<List<int>> _notificationStreamController = StreamController<List<int>>.broadcast();
   late final Stream<List<int>> _encodedMeasurements;
   Stream<List<int>> get arrivingMessages => _encodedMeasurements;
   StreamSubscription<List<int>> ? _notificationSubscription;
@@ -27,8 +27,8 @@ class HappySleepClientAndroid implements HappySleepClient{
   HappySleepClientAndroid(FlutterReactiveBle hostBleDevice, this.deviceID ) :
     _reactiveBle=hostBleDevice
   {
-    _encodedMeasurements = _notificationStreamController.stream.asBroadcastStream();
-    _connectionStateStream = _connectionStateController.stream.asBroadcastStream();
+    _encodedMeasurements = _notificationStreamController.stream;
+    _connectionStateStream = _connectionStateController.stream;
     writeCharacteristic = QualifiedCharacteristic(characteristicId: CHARACTERISTICS.WRITABLE, serviceId: SERVICES.MAIN, deviceId: deviceID);
     notificationCharacteristic = QualifiedCharacteristic(characteristicId: CHARACTERISTICS.NOTIFICATIONS, serviceId: SERVICES.MAIN, deviceId: deviceID);
   }
@@ -64,9 +64,10 @@ class HappySleepClientAndroid implements HappySleepClient{
 
   }
 
-  void connect(){
+  @override
+  Future<void> connect() async {
     
-    _connection?.cancel();
+    await _connection?.cancel();
     _connect();
 
     _connection_watchdog = _connectionStateStream.listen(

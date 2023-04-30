@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:android_belt_driver/drivers/belt_driver/HappySleep.dart';
 import 'package:android_belt_driver/drivers/belt_driver/clientAndroid.dart';
+import 'package:android_belt_driver/gui/mainDrawer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 
@@ -163,6 +164,7 @@ class _MyHomePageState extends State<MyHomePage> {
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
     return Scaffold(
+      drawer: MainDrawer(belt: belt,),
       appBar: AppBar(
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
@@ -217,7 +219,7 @@ class _MyHomePageState extends State<MyHomePage> {
             IconButton(
               onPressed: () => belt.connect(),
               icon: const Icon(Icons.bluetooth),
-              color: _state==0 ? Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? Color.fromRGBO(0, 0, 255, 1) :Color.fromRGBO(0, 255, 0, 1) ),
+              color: _state==0 ? const Color.fromRGBO(255, 0, 0, 1) : ( _state==1 ? const Color.fromRGBO(0, 0, 255, 1) :const Color.fromRGBO(0, 255, 0, 1) ),
             )
             
           ],
